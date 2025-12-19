@@ -6,10 +6,10 @@ from ultralytics import YOLO
 import supervision as sv
 import numpy as np
 import psycopg2
-import easyocr # <--- O NOVO JOGADOR
+import easyocr
 
 # --- CONFIGURAÇÃO ---
-VIDEO_SOURCE = "teste_video.MOV" # Teste nos vídeos gravados primeiro!
+VIDEO_SOURCE = "teste_video.MOV" # Teste nos vídeos gravados
 # VIDEO_SOURCE = 0 
 
 MODEL_NAME = "yolov8m.pt"
@@ -25,11 +25,11 @@ DB_PARAMS = {
 
 CLASS_MAPPING = { 2: 'carro', 3: 'moto', 5: 'onibus', 7: 'caminhao' }
 
-# INICIALIZA O LEITOR DE PLACAS (Usa a GPU RTX 5060)
+# INICIALIZA O LEITOR DE PLACAS
 print("🧠 Carregando modelo de leitura de placas (EasyOCR)...")
 reader = easyocr.Reader(['en'], gpu=True) 
 
-# --- FUNÇÃO DE COR ---
+# FUNÇÃO DE COR
 def detectar_cor_predominante(frame, bbox):
     x1, y1, x2, y2 = map(int, bbox)
     h, w, _ = frame.shape
@@ -62,7 +62,7 @@ def detectar_cor_predominante(frame, bbox):
             nome_cor = nome
     return nome_cor
 
-# --- NOVA FUNÇÃO: LER PLACA ---
+# LER PLACA
 def ler_placa_automovel(frame, bbox):
     x1, y1, x2, y2 = map(int, bbox)
     h_img, w_img, _ = frame.shape
@@ -74,27 +74,23 @@ def ler_placa_automovel(frame, bbox):
     carro_crop = frame[y1:y2, x1:x2]
     if carro_crop.size == 0: return "ILEGIVEL"
 
-    # ESTRATÉGIA: A placa geralmente está na metade de baixo do carro
-    # Vamos cortar só a metade inferior para o OCR não ler "Chevrolet" no vidro
     h_car, w_car, _ = carro_crop.shape
-    metade_inferior = carro_crop[int(h_car * 0.5):, :] # Pega do meio pra baixo
+    metade_inferior = carro_crop[int(h_car * 0.5):, :] 
     
-    # Pré-processamento (Deixa Preto e Branco para facilitar a leitura)
+    # Pré-processamento
     gray = cv2.cvtColor(metade_inferior, cv2.COLOR_BGR2GRAY)
     
     # Manda o EasyOCR ler
-    # detail=0 retorna só o texto. allowlist ajuda a filtrar só letras e numeros
     try:
         resultado = reader.readtext(gray, detail=0, allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
     except:
         return "ERRO_OCR"
     
-    # Filtra o melhor resultado (Placas tem geralmente entre 5 a 7 caracteres)
     placa_final = "ILEGIVEL"
     for texto in resultado:
-        if len(texto) >= 5: # Ignora lixo pequeno tipo "BR" ou parafusos
+        if len(texto) >= 5: 
             placa_final = texto
-            break # Pega o primeiro que parecer uma placa
+            break 
             
     return placa_final
 
@@ -107,7 +103,7 @@ def salvar_no_banco(tipo, cor, placa, is_contramao):
             (tipo_veiculo, cor_predominante, placa_detectada, is_contramao)
             VALUES (%s, %s, %s, %s)
         """
-        # Se a placa for ilegível, salvamos NULL ou o texto "ILEGIVEL"
+    
         if placa == "ILEGIVEL": placa = None 
         
         cursor.execute(query, (tipo, cor, placa, is_contramao))
@@ -166,7 +162,7 @@ def main():
         
         cross_in, cross_out = line_zone.trigger(detections=detections)
         
-        # --- LÓGICA UNIFICADA ---
+        # LÓGICA UNIFICADA
         # Função auxiliar para processar quem cruzou a linha
         def processar_cruzamento(indices_cruzamento, is_contramao):
             if indices_cruzamento.any():
@@ -179,8 +175,7 @@ def main():
                         # 1. Detectar Cor
                         cor = detectar_cor_predominante(frame, bbox)
                         
-                        # 2. Ler Placa (AQUI É O PESO PESADO!)
-                        # Só lê a placa se for carro/caminhão. Moto é muito difícil.
+                        # 2. Ler Placa
                         placa = "---"
                         if class_id in [2, 5, 7]: # Carro, Onibus, Caminhao
                             placa = ler_placa_automovel(frame, bbox)
@@ -211,4 +206,5 @@ def main():
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
+
     main()
